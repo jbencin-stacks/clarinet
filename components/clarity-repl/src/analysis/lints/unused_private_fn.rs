@@ -8,14 +8,13 @@
 //! **NOTE:** It is common to intentinoally have unused private functions for unit testing.
 //! In this case, you should annotate the function with `;; #[allow(unused_private_fn)]`
 
-use std::collections::HashMap;
-
 use clarity::vm::analysis::analysis_db::AnalysisDatabase;
 use clarity::vm::analysis::types::ContractAnalysis;
 use clarity::vm::diagnostic::{Diagnostic, Level};
 use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation, AnnotationKind, WarningKind};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor};
@@ -56,11 +55,12 @@ pub struct UnusedPrivateFn<'a> {
     annotations: &'a Vec<Annotation>,
     active_annotation: Option<usize>,
     level: Level,
-    private_fns: HashMap<&'a ClarityName, PrivateFnData<'a>>,
+    private_fns: HashMap<'a, &'a ClarityName, PrivateFnData<'a>>,
 }
 
 impl<'a> UnusedPrivateFn<'a> {
     fn new(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         annotations: &'a Vec<Annotation>,
         level: Level,
@@ -72,7 +72,7 @@ impl<'a> UnusedPrivateFn<'a> {
             level,
             annotations,
             active_annotation: None,
-            private_fns: HashMap::new(),
+            private_fns: HashMap::new_in(allocator),
         }
     }
 
@@ -220,6 +220,7 @@ impl AnalysisPass for UnusedPrivateFn<'_> {
     ) -> AnalysisResult {
         let settings = UnusedPrivateFnSettings::new();
         let lint = UnusedPrivateFn::new(
+            analysis_cache.get_allocator(),
             analysis_cache.contract_analysis.clarity_version,
             analysis_cache.annotations,
             level,

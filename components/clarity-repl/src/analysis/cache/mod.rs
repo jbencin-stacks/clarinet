@@ -17,6 +17,11 @@ pub struct AnalysisCache<'a> {
     pub contract_analysis: &'a ContractAnalysis,
     pub annotations: &'a Vec<Annotation>,
 
+    /// For data structures which we build from contract source code, we can use an allocator which is faster then the global allocator
+    ///
+    /// The assumptions we are making for this allocator...
+    ///  - We don't need to free items, so we can use a bump allocator for fast allocation
+    ///  - DoS resistance doesn't matter here, so we don't need a cryptographic hash function
     allocator: &'a Allocator,
     constants: Option<ConstantMap<'a>>,
     bindings: Option<BindingMap<'a>>,
@@ -37,6 +42,12 @@ impl<'a> AnalysisCache<'a> {
         }
     }
 
+    /// Get allocator used by cache
+    pub fn get_allocator(&self) -> &Allocator {
+        self.allocator
+    }
+
+    /// Get map of constants defined in contract
     pub fn get_constants(&mut self) -> &ConstantMap<'a> {
         self.constants.get_or_insert(ConstantMapBuilder::build(
             self.allocator,
@@ -46,6 +57,7 @@ impl<'a> AnalysisCache<'a> {
         ))
     }
 
+    /// Get map of `let` bindings and function args defined in contract
     pub fn get_bindings(&mut self) -> &BindingMap<'a> {
         self.bindings.get_or_insert(BindingMapBuilder::build(
             self.allocator,

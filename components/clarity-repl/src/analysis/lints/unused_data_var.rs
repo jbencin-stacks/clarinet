@@ -4,14 +4,13 @@
 //!  - The variable is never referenced
 //!  - The variable is never modified (suggest using constant instead)
 
-use std::collections::HashMap;
-
 use clarity::vm::analysis::analysis_db::AnalysisDatabase;
 use clarity::vm::analysis::types::ContractAnalysis;
 use clarity::vm::diagnostic::{Diagnostic, Level};
 use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation, AnnotationKind, WarningKind};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor};
@@ -55,11 +54,12 @@ pub struct UnusedDataVar<'a> {
     annotations: &'a Vec<Annotation>,
     active_annotation: Option<usize>,
     level: Level,
-    data_vars: HashMap<&'a ClarityName, DataVarData<'a>>,
+    data_vars: HashMap<'a, &'a ClarityName, DataVarData<'a>>,
 }
 
 impl<'a> UnusedDataVar<'a> {
     fn new(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         annotations: &'a Vec<Annotation>,
         level: Level,
@@ -71,7 +71,7 @@ impl<'a> UnusedDataVar<'a> {
             level,
             annotations,
             active_annotation: None,
-            data_vars: HashMap::new(),
+            data_vars: HashMap::new_in(allocator),
         }
     }
 
@@ -210,6 +210,7 @@ impl AnalysisPass for UnusedDataVar<'_> {
     ) -> AnalysisResult {
         let settings = UnusedDataVarSettings::new();
         let lint = UnusedDataVar::new(
+            analysis_cache.get_allocator(),
             analysis_cache.contract_analysis.clarity_version,
             analysis_cache.annotations,
             level,

@@ -2,8 +2,6 @@
 //!
 //! A trait is considered unused if there is no public or read-only function parameter with the trait type
 
-use std::collections::HashMap;
-
 use clarity::vm::analysis::analysis_db::AnalysisDatabase;
 use clarity::vm::analysis::types::ContractAnalysis;
 use clarity::vm::diagnostic::{Diagnostic, Level};
@@ -11,6 +9,7 @@ use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression, SymbolicExpressionType};
 use clarity_types::types::TraitIdentifier;
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation, AnnotationKind, WarningKind};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor, TypedVar};
@@ -49,7 +48,7 @@ pub struct UnusedTrait<'a> {
     annotations: &'a Vec<Annotation>,
     active_annotation: Option<usize>,
     level: Level,
-    traits: HashMap<&'a ClarityName, TraitUsage<'a>>,
+    traits: HashMap<'a, &'a ClarityName, TraitUsage<'a>>,
 }
 
 impl<'a> TraitUsage<'a> {
@@ -66,6 +65,7 @@ impl<'a> TraitUsage<'a> {
 
 impl<'a> UnusedTrait<'a> {
     fn new(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         annotations: &'a Vec<Annotation>,
         level: Level,
@@ -77,7 +77,7 @@ impl<'a> UnusedTrait<'a> {
             level,
             annotations,
             active_annotation: None,
-            traits: HashMap::new(),
+            traits: HashMap::new_in(allocator),
         }
     }
 
@@ -363,6 +363,7 @@ impl AnalysisPass for UnusedTrait<'_> {
     ) -> AnalysisResult {
         let settings = UnusedTraitSettings::new();
         let lint = UnusedTrait::new(
+            analysis_cache.get_allocator(),
             analysis_cache.contract_analysis.clarity_version,
             analysis_cache.annotations,
             level,

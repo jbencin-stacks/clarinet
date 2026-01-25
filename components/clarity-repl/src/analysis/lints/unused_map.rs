@@ -4,7 +4,7 @@
 //!  - The map is never referenced
 //!  - The map is used, but in a way that cannot affect contract execution
 
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 
 use clarity::vm::analysis::analysis_db::AnalysisDatabase;
 use clarity::vm::analysis::types::ContractAnalysis;
@@ -12,6 +12,7 @@ use clarity::vm::diagnostic::{Diagnostic, Level};
 use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap as OxcHashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation, AnnotationKind, WarningKind};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor};
@@ -70,11 +71,12 @@ pub struct UnusedMap<'a> {
     active_annotation: Option<usize>,
     level: Level,
     /// Clarity maps declared with `define-map`
-    maps: HashMap<&'a ClarityName, MapData<'a>>,
+    maps: OxcHashMap<'a, &'a ClarityName, MapData<'a>>,
 }
 
 impl<'a> UnusedMap<'a> {
     fn new(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         annotations: &'a Vec<Annotation>,
         level: Level,
@@ -86,7 +88,7 @@ impl<'a> UnusedMap<'a> {
             level,
             annotations,
             active_annotation: None,
-            maps: HashMap::new(),
+            maps: OxcHashMap::new_in(allocator),
         }
     }
 
@@ -225,8 +227,8 @@ impl<'a> ASTVisitor<'a> for UnusedMap<'a> {
         &mut self,
         _expr: &'a SymbolicExpression,
         name: &'a ClarityName,
-        _key: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
-        _value: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _key: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _value: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
     ) -> bool {
         _ = self.maps.get_mut(name).map(|data| data.map_insert = true);
         true
@@ -236,7 +238,7 @@ impl<'a> ASTVisitor<'a> for UnusedMap<'a> {
         &mut self,
         _expr: &'a SymbolicExpression,
         name: &'a ClarityName,
-        _key: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _key: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
     ) -> bool {
         _ = self.maps.get_mut(name).map(|data| data.map_delete = true);
         true
@@ -246,8 +248,8 @@ impl<'a> ASTVisitor<'a> for UnusedMap<'a> {
         &mut self,
         _expr: &'a SymbolicExpression,
         name: &'a ClarityName,
-        _key: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
-        _value: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _key: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _value: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
     ) -> bool {
         _ = self.maps.get_mut(name).map(|data| data.map_set = true);
         true
@@ -257,7 +259,7 @@ impl<'a> ASTVisitor<'a> for UnusedMap<'a> {
         &mut self,
         _expr: &'a SymbolicExpression,
         name: &'a ClarityName,
-        _key: &HashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
+        _key: &StdHashMap<Option<&'a ClarityName>, &'a SymbolicExpression>,
     ) -> bool {
         _ = self.maps.get_mut(name).map(|data| data.map_get = true);
         true
@@ -273,6 +275,7 @@ impl AnalysisPass for UnusedMap<'_> {
     ) -> AnalysisResult {
         let settings = UnusedMapSettings::new();
         let lint = UnusedMap::new(
+            analysis_cache.get_allocator(),
             analysis_cache.contract_analysis.clarity_version,
             analysis_cache.annotations,
             level,
