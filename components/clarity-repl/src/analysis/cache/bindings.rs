@@ -1,12 +1,12 @@
 //! Builds `HashMap` of all bindings (`let` bindings and function args) in a contract
-
-use std::collections::HashMap;
+use std::collections::HashMap as StdHashMap;
 use std::hash::Hash;
 
 use clarity::vm::analysis::ContractAnalysis;
 use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap as OxcHashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor, TypedVar};
@@ -44,19 +44,20 @@ impl<'a> BindingData<'a> {
     }
 }
 
-pub type BindingMap<'a> = HashMap<Binding<'a>, BindingData<'a>>;
+pub type BindingMap<'a> = OxcHashMap<'a, Binding<'a>, BindingData<'a>>;
 
 pub struct BindingMapBuilder<'a> {
     clarity_version: ClarityVersion,
     annotations: &'a Vec<Annotation>,
     /// Names of all `let` bindings and function args currently in scope
-    active_bindings: HashMap<&'a ClarityName, BindingData<'a>>,
+    active_bindings: StdHashMap<&'a ClarityName, BindingData<'a>>,
     /// Variables which went out of scope without being referenced
     bindings: BindingMap<'a>,
 }
 
 impl<'a> BindingMapBuilder<'a> {
     pub fn build(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         contract_analysis: &'a ContractAnalysis,
         annotations: &'a Vec<Annotation>,
@@ -64,8 +65,8 @@ impl<'a> BindingMapBuilder<'a> {
         let mut builder = Self {
             clarity_version,
             annotations,
-            active_bindings: HashMap::new(),
-            bindings: HashMap::new(),
+            active_bindings: StdHashMap::new(),
+            bindings: OxcHashMap::new_in(allocator),
         };
         // Traverse the entire AST
         traverse(&mut builder, &contract_analysis.expressions);
@@ -124,7 +125,7 @@ impl<'a> ASTVisitor<'a> for BindingMapBuilder<'a> {
     fn traverse_let(
         &mut self,
         expr: &'a SymbolicExpression,
-        bindings: &HashMap<&'a ClarityName, &'a SymbolicExpression>,
+        bindings: &StdHashMap<&'a ClarityName, &'a SymbolicExpression>,
         body: &'a [SymbolicExpression],
     ) -> bool {
         // Add `let` bindings to current scope and save them

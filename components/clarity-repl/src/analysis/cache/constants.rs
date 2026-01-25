@@ -26,21 +26,21 @@ impl<'a> ConstantData<'a> {
     }
 }
 
-pub type ConstantMap<'a, 'alloc> = HashMap<'alloc, &'a ClarityName, ConstantData<'a>>;
+pub type ConstantMap<'a> = HashMap<'a, &'a ClarityName, ConstantData<'a>>;
 
-pub struct ConstantMapBuilder<'a, 'alloc> {
+pub struct ConstantMapBuilder<'a> {
     clarity_version: ClarityVersion,
     annotations: &'a Vec<Annotation>,
-    map: ConstantMap<'a, 'alloc>,
+    map: ConstantMap<'a>,
 }
 
-impl<'a, 'alloc> ConstantMapBuilder<'a, 'alloc> {
+impl<'a> ConstantMapBuilder<'a> {
     pub fn build(
-        allocator: &'alloc Allocator,
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         contract_analysis: &'a ContractAnalysis,
         annotations: &'a Vec<Annotation>,
-    ) -> ConstantMap<'a, 'alloc> {
+    ) -> ConstantMap<'a> {
         let mut builder = Self {
             clarity_version,
             annotations,
@@ -53,7 +53,7 @@ impl<'a, 'alloc> ConstantMapBuilder<'a, 'alloc> {
     }
 }
 
-impl<'a> ASTVisitor<'a> for ConstantMapBuilder<'a, '_> {
+impl<'a> ASTVisitor<'a> for ConstantMapBuilder<'a> {
     fn get_clarity_version(&self) -> &ClarityVersion {
         &self.clarity_version
     }

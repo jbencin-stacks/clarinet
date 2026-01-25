@@ -18,7 +18,7 @@ pub struct AnalysisCache<'a> {
     pub annotations: &'a Vec<Annotation>,
 
     allocator: &'a Allocator,
-    constants: Option<ConstantMap<'a, 'a>>,
+    constants: Option<ConstantMap<'a>>,
     bindings: Option<BindingMap<'a>>,
 }
 
@@ -37,7 +37,7 @@ impl<'a> AnalysisCache<'a> {
         }
     }
 
-    pub fn get_constants(&mut self) -> &ConstantMap<'a, 'a> {
+    pub fn get_constants(&mut self) -> &ConstantMap<'a> {
         self.constants.get_or_insert(ConstantMapBuilder::build(
             self.allocator,
             self.contract_analysis.clarity_version,
@@ -48,6 +48,7 @@ impl<'a> AnalysisCache<'a> {
 
     pub fn get_bindings(&mut self) -> &BindingMap<'a> {
         self.bindings.get_or_insert(BindingMapBuilder::build(
+            self.allocator,
             self.contract_analysis.clarity_version,
             self.contract_analysis,
             self.annotations,
