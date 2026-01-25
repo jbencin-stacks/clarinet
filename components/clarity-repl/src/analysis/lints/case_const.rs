@@ -26,7 +26,7 @@ impl UnusedConstSettings {
 
 pub struct CaseConst<'a, 'b>
 where
-    'b: 'a,
+    'b: 'a
 {
     analysis_cache: &'a mut AnalysisCache<'b>,
     _settings: UnusedConstSettings,

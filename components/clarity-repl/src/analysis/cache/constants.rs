@@ -1,10 +1,9 @@
 //! Builds `HashMap` of all constants in a contract
 
-use std::collections::HashMap;
-
 use clarity::vm::analysis::ContractAnalysis;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor};
@@ -27,24 +26,25 @@ impl<'a> ConstantData<'a> {
     }
 }
 
-pub type ConstantMap<'a> = HashMap<&'a ClarityName, ConstantData<'a>>;
+pub type ConstantMap<'a, 'alloc> = HashMap<'alloc, &'a ClarityName, ConstantData<'a>>;
 
-pub struct ConstantMapBuilder<'a> {
+pub struct ConstantMapBuilder<'a, 'alloc> {
     clarity_version: ClarityVersion,
     annotations: &'a Vec<Annotation>,
-    map: ConstantMap<'a>,
+    map: ConstantMap<'a, 'alloc>,
 }
 
-impl<'a> ConstantMapBuilder<'a> {
+impl<'a, 'alloc> ConstantMapBuilder<'a, 'alloc> {
     pub fn build(
+        allocator: &'alloc Allocator,
         clarity_version: ClarityVersion,
         contract_analysis: &'a ContractAnalysis,
         annotations: &'a Vec<Annotation>,
-    ) -> ConstantMap<'a> {
+    ) -> ConstantMap<'a, 'alloc> {
         let mut builder = Self {
             clarity_version,
             annotations,
-            map: HashMap::new(),
+            map: HashMap::new_in(allocator),
         };
         // Traverse the entire AST
         traverse(&mut builder, &contract_analysis.expressions);
@@ -53,7 +53,7 @@ impl<'a> ConstantMapBuilder<'a> {
     }
 }
 
-impl<'a> ASTVisitor<'a> for ConstantMapBuilder<'a> {
+impl<'a> ASTVisitor<'a> for ConstantMapBuilder<'a, '_> {
     fn get_clarity_version(&self) -> &ClarityVersion {
         &self.clarity_version
     }

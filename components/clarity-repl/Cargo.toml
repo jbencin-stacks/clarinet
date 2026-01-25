@@ -25,6 +25,7 @@ categories = [
 chrono = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
+oxc_allocator = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
 schemars = { workspace = true, optional = true }

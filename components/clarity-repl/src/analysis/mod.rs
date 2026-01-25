@@ -21,6 +21,7 @@ use clarity::vm::diagnostic::Diagnostic;
 use clarity_types::diagnostic::Level as ClarityDiagnosticLevel;
 use indexmap::IndexMap;
 use linter::{LintLevel, LintName};
+use oxc_allocator::Allocator;
 #[cfg(feature = "json_schema")]
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -272,8 +273,11 @@ pub fn run_analysis(
         passes.push((lint, level));
     }
 
+    // Create shared bump allocator for fast allocations
+    let allocator = Allocator::new();
+
     // Create shared cache for all passes/lints
-    let mut cache = AnalysisCache::new(contract_analysis, annotations);
+    let mut cache = AnalysisCache::new(&allocator, contract_analysis, annotations);
 
     execute(analysis_db, |database| {
         for (pass, level) in passes {

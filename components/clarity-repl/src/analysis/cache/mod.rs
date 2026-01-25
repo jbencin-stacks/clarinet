@@ -1,6 +1,7 @@
 //! Data structures used in multiple lints/analysis passes
 
 use clarity::vm::analysis::ContractAnalysis;
+use oxc_allocator::Allocator;
 
 pub mod bindings;
 pub mod constants;
@@ -16,13 +17,19 @@ pub struct AnalysisCache<'a> {
     pub contract_analysis: &'a ContractAnalysis,
     pub annotations: &'a Vec<Annotation>,
 
-    constants: Option<ConstantMap<'a>>,
+    allocator: &'a Allocator,
+    constants: Option<ConstantMap<'a, 'a>>,
     bindings: Option<BindingMap<'a>>,
 }
 
 impl<'a> AnalysisCache<'a> {
-    pub fn new(contract_analysis: &'a ContractAnalysis, annotations: &'a Vec<Annotation>) -> Self {
+    pub fn new(
+        allocator: &'a Allocator,
+        contract_analysis: &'a ContractAnalysis,
+        annotations: &'a Vec<Annotation>,
+    ) -> Self {
         Self {
+            allocator,
             contract_analysis,
             annotations,
             constants: None,
@@ -30,8 +37,9 @@ impl<'a> AnalysisCache<'a> {
         }
     }
 
-    pub fn get_constants(&mut self) -> &ConstantMap<'a> {
+    pub fn get_constants(&mut self) -> &ConstantMap<'a, 'a> {
         self.constants.get_or_insert(ConstantMapBuilder::build(
+            self.allocator,
             self.contract_analysis.clarity_version,
             self.contract_analysis,
             self.annotations,
