@@ -2,14 +2,13 @@
 //!
 //! Tokens are considered unused if declared but never minted
 
-use std::collections::HashMap;
-
 use clarity::vm::analysis::analysis_db::AnalysisDatabase;
 use clarity::vm::analysis::types::ContractAnalysis;
 use clarity::vm::diagnostic::{Diagnostic, Level};
 use clarity::vm::representations::Span;
 use clarity::vm::{ClarityVersion, SymbolicExpression};
 use clarity_types::ClarityName;
+use oxc_allocator::{Allocator, HashMap};
 
 use crate::analysis::annotation::{get_index_of_span, Annotation, AnnotationKind, WarningKind};
 use crate::analysis::ast_visitor::{traverse, ASTVisitor};
@@ -28,20 +27,37 @@ impl UnusedTokenSettings {
     }
 }
 
+/// Data on FT or NFT usage
+struct TokenUsage<'a> {
+    expr: &'a SymbolicExpression,
+    /// Has this token been minted?
+    pub minted: bool,
+}
+
+impl<'a> TokenUsage<'a> {
+    fn new(expr: &'a SymbolicExpression) -> Self {
+        Self {
+            expr,
+            minted: false,
+        }
+    }
+}
+
 pub struct UnusedToken<'a> {
     clarity_version: ClarityVersion,
     _settings: UnusedTokenSettings,
     annotations: &'a Vec<Annotation>,
     active_annotation: Option<usize>,
     /// Maps of tokens not yet used
-    unused_fts: HashMap<&'a ClarityName, &'a SymbolicExpression>,
-    unused_nfts: HashMap<&'a ClarityName, &'a SymbolicExpression>,
+    unused_fts: HashMap<'a, &'a ClarityName, TokenUsage<'a>>,
+    unused_nfts: HashMap<'a, &'a ClarityName, TokenUsage<'a>>,
     /// Clarity diagnostic level
     level: Level,
 }
 
 impl<'a> UnusedToken<'a> {
     fn new(
+        allocator: &'a Allocator,
         clarity_version: ClarityVersion,
         annotations: &'a Vec<Annotation>,
         level: Level,
@@ -53,8 +69,8 @@ impl<'a> UnusedToken<'a> {
             level,
             annotations,
             active_annotation: None,
-            unused_fts: HashMap::new(),
-            unused_nfts: HashMap::new(),
+            unused_fts: HashMap::new_in(allocator),
+            unused_nfts: HashMap::new_in(allocator),
         }
     }
 
@@ -105,21 +121,21 @@ impl<'a> UnusedToken<'a> {
     fn generate_diagnostics(&mut self) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::with_capacity(self.unused_tokens());
 
-        for (name, expr) in &self.unused_fts {
+        for (name, data) in &self.unused_fts {
             if is_explicitly_unused(name) {
                 continue;
             }
             let message = Self::make_diagnostic_message_ft(name);
-            let diagnostic = self.make_diagnostic(expr, message);
+            let diagnostic = self.make_diagnostic(data.expr, message);
             diagnostics.push(diagnostic);
         }
 
-        for (name, expr) in &self.unused_nfts {
+        for (name, data) in &self.unused_nfts {
             if is_explicitly_unused(name) {
                 continue;
             }
             let message = Self::make_diagnostic_message_nft(name);
-            let diagnostic = self.make_diagnostic(expr, message);
+            let diagnostic = self.make_diagnostic(data.expr, message);
             diagnostics.push(diagnostic);
         }
 
@@ -143,7 +159,8 @@ impl<'a> ASTVisitor<'a> for UnusedToken<'a> {
         self.set_active_annotation(&expr.span);
 
         if !self.allow() {
-            self.unused_fts.insert(name, expr);
+            let data = TokenUsage::new(expr);
+            self.unused_fts.insert(name, data);
         }
 
         true
@@ -158,7 +175,8 @@ impl<'a> ASTVisitor<'a> for UnusedToken<'a> {
         self.set_active_annotation(&expr.span);
 
         if !self.allow() {
-            self.unused_nfts.insert(name, expr);
+            let data = TokenUsage::new(expr);
+            self.unused_nfts.insert(name, data);
         }
 
         true
@@ -171,7 +189,9 @@ impl<'a> ASTVisitor<'a> for UnusedToken<'a> {
         _amount: &'a SymbolicExpression,
         _recipient: &'a SymbolicExpression,
     ) -> bool {
-        self.unused_fts.remove(token);
+        if let Some(data) = self.unused_fts.get_mut(token) {
+            data.minted = true;
+        };
         true
     }
 
@@ -182,7 +202,9 @@ impl<'a> ASTVisitor<'a> for UnusedToken<'a> {
         _identifier: &'a SymbolicExpression,
         _recipient: &'a SymbolicExpression,
     ) -> bool {
-        self.unused_nfts.remove(token);
+        if let Some(data) = self.unused_nfts.get_mut(token) {
+            data.minted = true;
+        };
         true
     }
 }
@@ -196,6 +218,7 @@ impl AnalysisPass for UnusedToken<'_> {
     ) -> AnalysisResult {
         let settings = UnusedTokenSettings::new();
         let lint = UnusedToken::new(
+            analysis_cache.get_allocator(),
             analysis_cache.contract_analysis.clarity_version,
             analysis_cache.annotations,
             level,
