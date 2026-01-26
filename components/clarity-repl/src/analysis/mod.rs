@@ -274,7 +274,8 @@ pub fn run_analysis(
     }
 
     // Create shared bump allocator for fast allocations
-    let allocator = Allocator::new();
+    let capacity = 1usize << 20;
+    let allocator = Allocator::with_capacity(capacity);
 
     // Create shared cache for all passes/lints
     let mut cache = AnalysisCache::new(&allocator, contract_analysis, annotations);
